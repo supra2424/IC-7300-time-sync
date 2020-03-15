@@ -1,79 +1,99 @@
-#! /usr/bin/python3
-#
-# IC-7300 time sync by Kevin Loughin, KB9RLW. June 2019
-# Ver. 1.0
-# This script will set the Icom 7300 internal clock based on your computer
-# clock.  Provided your computer clock is synced to network time, this
-# should insure your radio's clock is within a fraction of a second of
-# standard time.
-#
-# Below are three variables you need to change to match your location and
-# radio.  If your computer clock is not set to Universal time, set the 
-# offset value.
-# Also the serial port name for your IC-7300 on your computer. Change to 
-# match your setup. i.e. COM3 or similar for windows.
-#
-baudrate = 9600  #change to match your radio
-gmtoffset = 0  #change to a negative or positive offset from GMT if you
-#               want to use local time.  i.e. -5 for EST
-serialport = "/dev/ttyUSB0"  # Serial port of your radios serial interface.
+#!/usr/bin/env python3
 
-# Defining the command to set the radios time in hex bytes.
-preamble = ["0xFE", "0xFE", "0x94", "0xE0", "0x1A", "0x05", "0x00", "0x95"]
-postamble = "0xfd"
+''' Icom IC-7300 Time Synchronization
 
+    This program sets the clock of the Icom IC-7300 radio to the current time
+    of the computer.  See "User Configurations" section below for program  
+    options that must be set.  This script requires the pyserial module.  Add 
+    this dependency with the `py -m pip install pyserial` command.
+    
+    Copyright (C) 2020  Claus Niesen
 
-#Import libraries we'll need to use
-import time
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+'''    
+    
 import serial
-import struct
+import time
 
-# Here we get the computers current time in hours and minutes.
-# Add in the offset, if any, and roll over if we exceed 23 or go below 0
-# hours.  Finally appending hex byte formated time data to the command string.
-t = time.localtime()
-hours = time.strftime("%H")
-hours = int(hours) + gmtoffset
-if hours < 0:
-    hours = 23 + hours
-if hours > 23:
-    hours = 23 - hours
-hours = str(hours)
+### User Configurations ###
+#
+# Baud rate for the CI-V interface of the Icom IC-7300.
+#baudrate = 9600
+baudrate = 115200
+#
+# Serial port of the computer on which the CI-V interface of the radio is connected.
+#serialport = '/dev/ttyUSB0'  # for Linux
+#serialport = 'COM3'          # for Windows
+serialport = 'COM4' 
+#
+# Swap the CLOCK and UTC times of the Icom IC-7300. 
+#swapclock = False  # display local time on CLOCK
+#swapclock = True  # display UTC time on CLOCK (the UTC display will show local time)
+swapclock = True 
+#
+### end of user configurations ###
 
-if (len(hours) < 2):
-    hours = "0" + str(hours)
-hours = "0x" + hours
-preamble.append(hours)
+preamble = 'FEFE94E01A0500'
+setDateCommand = '94'
+setTimeCommand = '95'
+setUtcOffsetCommand = '96'
+postamble = 'FD'
+responseOk = 'FEFEE094FBFD'
 
-minutes = (int(time.strftime("%M")) + 1)
-minutes = str(minutes)
-if (len(minutes) < 2):
-    minutes = "0" + minutes
-minutes = "0x" + minutes
-preamble.append(minutes)
-preamble.append('0xFD')
-
-# Now I get the current computer time in seconds.  Needed to set the time only
-# at the top of the minute.
-seconds = int(time.strftime("%S"))
-
-# Now we wait for the top of the minute.
-lastsec = 1
-while(seconds != 0):
-   t = time.localtime()
-   seconds = int(time.strftime("%S"))
-   if(seconds != lastsec):
-        lastsec = seconds
-   time.sleep(.01)
-
-# Now that we've reached the top of the minute, set the radios time!
 ser = serial.Serial(serialport, baudrate)
+ser.timeout = 5
 
-count = 0
-while(count < 11):
-    senddata = int(bytes(preamble[count], 'UTF-8'), 16)
-    ser.write(struct.pack('>B', senddata))
-    count = count +1
+if (swapclock):
+    def getTime():
+        return time.gmtime()
+else: 
+    def getTime():
+        return time.localtime()
+        
+def sendCommand(command, data):
+    command = preamble + command + data + postamble
+    ser.write(bytes.fromhex(command))
+    ser.read_until(bytes.fromhex(postamble)) # the send command (why, oh why?)
+    response = ser.read_until(bytes.fromhex(postamble)) 
+    if (response != bytes.fromhex(responseOk)):
+        exit('Error: Command ' + command + ' did not receive OK from radio.')
+        
+print('Setting Icom clock to', getTime().tm_zone, '. This may take up to 1 minute to complete.')
+
+# Set UTC offset on radio
+if(time.localtime().tm_gmtoff < 0):
+    offsetData = time.strftime('%H%M', time.gmtime(time.localtime().tm_gmtoff * -1))
+    if (swapclock):
+        offsetData += '00'
+    else:
+        offsetData += '01'
+else :
+    offsetData = time.strftime('%H%M', time.gmtime(time.localtime().tm_gmtoff))
+    if (swapclock):
+        offsetData += '01'
+    else:
+        offsetData += '00'
+sendCommand(setUtcOffsetCommand, offsetData)
+
+# Set date on radio
+dateData = time.strftime('%Y%m%d', getTime())
+sendCommand(setDateCommand, dateData)
+
+# Set time on radio (top of minute)
+while(time.localtime().tm_sec != 0):
+    pass
+timeData = time.strftime('%H%M', getTime())
+sendCommand(setTimeCommand, timeData)
 
 ser.close()
-# All done.  The radio is now in sync with the computer clock.

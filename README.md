@@ -1,17 +1,40 @@
-# IC-7300-time-sync
-Python3 script to sync the radio's clock with your computer via CAT commands.
+Icom IC-7300 Time Synchronization
+================================
 
-At the top of the script are a few variables you'll have to set.  The serial device name your 7300 is at, a GMT offset if your computer clock is set to local time and you want the radio on GMT.   The rest of the script is commented and should be self-explainatory.  
+Python3 script to set the clock of the Icom IC-7300 radio to the current time of the computer. 
+ 
+ 
+User Configurations
+-------------------
+The script in the Set_IC7300_time.py file contains a user configuration section that needs to be set correctly.
+ 
+**baudrate** - specifies the baud rate for the CI-V interface of the Icom IC-7300.   
+   Example: `baudrate = 115200` 
+ 
+**serialport** - specifies the serial port of the computer on which the CI-V interface of the radio is connected.  
+    Windows example: `serialport = 'COM3'`  
+    Linux example: `serialport = '/dev/ttyUSB0'` 
+   
+**swapclock** - specifies if the CLOCK and UTC times of the Icom IC-7300 should be swapped. 
+    `swapclock = False` keeps the CLOCK at local time and UTC time as UTC.
+    `swapclock = True` makes the CLOCK to display UTC time while the UTC time is actually the local time.  Some users prefere to see the UTC time on the top right of the Icom IC-7300 and this setting will do that.
 
-You can run it manually from the terminal, or set it up as a cron job to automatically update the radio clock at an interval.  
+   
+Running on Windows
+------------------
+Install the latest version of [Python3](https://www.python.org/downloads/) and add the pyserial module by executing the `py -m pip install pyserial` command from the command line.  Make sure the user configurations have been correctly set (see above).  Now the script can be run with the `py Set_IC7300_time.py` command.
 
-After downloading the script, you'll need to mark it as executable.  From the terminal, you can do this with the following command.
-chown +x {script name}
-From most desktops, you can right-click on the script and select properties.  Under the permissions tab, there should be a check box to "allow executing as a program".
 
-To make the script accessible system wide, you can copy it,  as the root user, to the /usr/bin directory.
-sudo cp ./{script name} /usr/bin
+Running on Linux / OSX
+----------------------
+Install the latest version of Python3 (e.g. `sudo apt install python3`) and pyserial (i.e. `sudo apt install python3-serial`). Make the script executable (i.e. `chmod +x Set_IC7300_time.py` and set the user configurations in the script (see above).  Now the script can be run (i.e. `python3 Set_IC7300_time.py`).
 
-When run, the script will get the current time of your computer, wait for the top of the minute at 00 seconds, and set the radio's time.
 
-There is a demo video on my you tube channel.  Search you tube for KB9RLW python to find it, or copy the video link below.
+History
+-------
+
+The Icom IC-7300 has the chronic habbit of loosing the current time.  It's apparently an issue with the internal clock battery.
+
+Kevin created the first version of this script to set the time in June 2019 that syncs the clock.  A video overview of this script can be seen at https://youtu.be/GhuI-vrCBhs .
+
+Claus did a complete rewrite of the script in March 2020, adding date and UTC offset syncing as well.
